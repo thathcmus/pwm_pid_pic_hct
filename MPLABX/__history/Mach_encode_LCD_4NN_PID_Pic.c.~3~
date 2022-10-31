@@ -1,0 +1,247 @@
+#INCLUDE <16F887.H>       //
+#device     adc=10         //
+#FUSES  HS              // cho phep su dung thach anh ngoai
+#USE DELAY(CLOCK=20M)      // thach anh 20M
+
+#define     up    pin_a2
+#define     dw    pin_a3
+
+#define     ss    pin_a0
+#define     inv   pin_a1
+
+#define LCD_ENABLE_PIN  PIN_b2                                    ////
+#define LCD_RS_PIN      PIN_b4                                    ////
+#define LCD_RW_PIN      PIN_b3                                    ////
+
+#define LCD_DATA4       PIN_D7                                    ////
+#define LCD_DATA5       PIN_D6                                    ////
+#define LCD_DATA6       PIN_D5                                    ////
+#define LCD_DATA7       PIN_D4                                    ////
+
+#include <lcd.c>
+
+signed int32 duty,xung,luu,v,dat,chay;
+int1     tt_ss,tt_inv;
+float   e,e1,e2,a,b,ga,kp,kd,ki,out,lastout,t;
+
+
+#int_ext
+void ngat_ngoai()
+{
+   xung++;
+}
+
+#int_timer1
+void ngat_timer()
+{
+   chay++;
+   disable_interrupts(int_ext);
+   setup_timer_1(T1_DISABLED);
+   set_timer1(3036);
+   
+   luu=xung;
+   xung=0;
+   
+   setup_timer_1(T1_INTERNAL|T1_DIV_BY_8);
+   enable_interrupts(int_ext);
+}
+
+void nn_ss()
+{
+   if(input(ss)==0)
+   {
+      delay_ms(20);
+      if(input(ss)==0)
+      {
+         tt_ss=~tt_ss;
+         if(tt_ss==1)         // cho chay   
+         {
+            if(tt_inv==1)        
+            {
+               setup_ccp1(CCP_OFF);   
+               setup_ccp2(CCP_PWM);   
+               set_pwm2_duty(duty);
+            }
+            else                 
+            {
+               setup_ccp2(CCP_OFF);   
+               setup_ccp1(CCP_PWM);   
+               set_pwm1_duty(duty);
+            }
+         }
+         else                 
+         {
+            setup_ccp1(CCP_OFF);   
+            setup_ccp2(CCP_OFF);   
+         }
+         while(!input(ss));
+      }
+   }
+}
+
+void nn_inv()
+{
+   if(input(inv)==0)
+   {
+      delay_ms(20);
+      if(input(inv)==0)
+      {
+         tt_inv=~tt_inv;
+         if(tt_inv==1)        
+         {
+            setup_ccp1(CCP_OFF);   
+            setup_ccp2(CCP_PWM);   
+            set_pwm2_duty(duty);
+         }
+         else                 
+         {
+            setup_ccp2(CCP_OFF);   
+            setup_ccp1(CCP_PWM);   
+            set_pwm1_duty(duty);
+         }
+         while(!input(inv));
+      }
+   }
+}
+
+void nn_up()
+{
+   if(input(up)==0)
+   {
+      delay_ms(20);
+      if(input(up)==0)
+      {
+         dat=dat+10;
+         if(dat>260)    dat=260;
+         while(!input(up));
+      }
+   }
+}
+
+void nn_dw()
+{
+   if(input(dw)==0)
+   {
+      delay_ms(20);
+      if(input(dw)==0)
+      {
+         dat=dat-10;
+         if(dat<0)         dat=0;
+         while(!input(dw));
+      }
+   }
+}
+
+
+void tinh_pid()
+{
+   e=dat-v;
+   a=2*t*kp+ki*t*t+2*kd;
+   b=t*t*ki-4*kd-2*t*kp;
+   ga=2*kd;
+   
+   out=(a*e+b*e1+ga*e2+2*t*lastout)/(2*t);
+   
+   lastout=out;
+   e2=e1;
+   e1=e;
+   
+   if(out>1000)         out=1000;
+   if(out<0)            out=0;
+   
+   duty=out;
+   if(tt_inv==1)        set_pwm2_duty(duty);
+   else                 set_pwm1_duty(duty);
+}
+
+void main()
+{
+   set_tris_a(0xff);
+   set_tris_c(0x00);
+   duty=0;
+   lcd_init();
+   setup_timer_2(T2_DIV_BY_16,249,1);     // so chia timer, gia tri bao tran cua timer 2, so lan tran de duoc chu ky mong muon, 0 -- 249 = 0.8ms : 1,   2: 2x0.8= 1.6ms vay timer 2 phai tran 2 lan de duoc chu ly mong muon
+   setup_ccp1(CCP_OFF);   
+   setup_ccp2(CCP_PWM);
+   set_pwm2_duty(duty);
+   
+   setup_timer_1(t1_internal|t1_div_by_8);
+   set_timer1(3036);
+   
+   enable_interrupts(global);
+   enable_interrupts(int_timer1);
+   enable_interrupts(int_ext);
+   ext_int_edge(INT_EXT_H2L);
+   
+   tt_ss=0;
+   tt_inv=1;
+   xung=0;
+   luu=0;
+   v=0;
+   
+   e=0;
+   e1=0;
+   e2=0;
+   out=0;
+   lastout=0;
+   dat=100;
+   t=0.1;
+   kp=6.5;
+   kd=0.1;
+   ki=1.0;
+   chay=0;
+   while(true)
+   {
+      v=(luu*600)/374;
+      tinh_pid();
+      if(chay>5)
+      {
+         chay=0;
+         lcd_gotoxy(1,1);
+         lcd_putc("CD:");
+         lcd_putc(dat/100+0x30);
+         lcd_putc(dat/10%10+0x30);
+         lcd_putc(dat%10+0x30);
+         lcd_putc("v/p");
+         
+         lcd_gotoxy(1,2);
+         lcd_putc("TD:");
+         lcd_putc(V/100+0x30);
+         lcd_putc(V/10%10+0x30);
+         lcd_putc(V%10+0x30);
+         lcd_putc("v/p");
+      }
+      
+      
+      if(tt_ss==1)
+      {
+         lcd_gotoxy(14,1);
+         lcd_putc("ON ");
+      }
+      else
+      {
+         lcd_gotoxy(14,1);
+         lcd_putc("OFF");
+      }
+      
+      if(tt_inv==1)
+      {
+         lcd_gotoxy(15,2);
+         lcd_putc("T");
+      }
+      else
+      {
+         lcd_gotoxy(15,2);
+         lcd_putc("N");
+      }
+//!      nn_up();
+//!      nn_dw();
+      nn_ss();
+      if(tt_ss==1)      
+      {
+         nn_inv();
+         nn_up();
+         nn_dw();
+      }
+   }
+}

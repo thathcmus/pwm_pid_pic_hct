@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <executable name="dist/default/production\Mach_encoder_4NN_LCD_PID_Pic16F887_MPlab.X.production.hex">
+    <memory name="program">
+      <units>words</units>
+      <length>8192</length>
+      <used>7357</used>
+      <free>835</free>
+    </memory>
+    <memory name="data">
+      <units>bytes</units>
+      <length>368</length>
+      <used>262</used>
+      <free>106</free>
+    </memory>
+  </executable>
+</project>
